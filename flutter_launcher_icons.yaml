@@ -1,0 +1,8 @@
+# flutter_launcher_icons.yaml — placer à la RACINE du projet
+flutter_icons:
+  android:                  true
+  ios:                      true
+  image_path:               "assets/images/catusnis_illustration.png"
+  adaptive_icon_background: "#0D3380"
+  adaptive_icon_foreground: "assets/images/catusnis_illustration.png"
+  min_sdk_android:          21

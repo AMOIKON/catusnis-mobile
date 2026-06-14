@@ -1,0 +1,13 @@
+# flutter_native_splash.yaml — placer à la RACINE du projet
+flutter_native_splash:
+  color:      "#0D3380"
+  image:      assets/images/catusnis_illustration.png
+  color_dark: "#0D3380"
+  image_dark: assets/images/catusnis_illustration.png
+  android_12:
+    color:    "#0D3380"
+    image:    assets/images/catusnis_illustration.png
+  fullscreen: false
+  android:    true
+  ios:        true
+  web:        false
