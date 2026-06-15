@@ -100,7 +100,7 @@ class AppDrawer extends StatelessWidget {
                 const _SectionLabel('ORGANISATION'),
                 _DrawerItem(
                   icon: Icons.map_outlined,
-                  label: 'Périmètre géographique',
+                  label: 'Assignations',
                   route: AppRoute.technicianSites,
                   current: currentRoute,
                   iconColor: const Color(0xFF0F4C81),

@@ -105,7 +105,8 @@ class _FournitureFormState extends State<FournitureFormScreen> {
         appBar: AppBar(
           backgroundColor: _kBlue,
           foregroundColor: Colors.white,
-          title: Text(_isEdit ? 'Modifier l\'article' : 'Nouvel article'),
+          title: Text(_isEdit ? 'Modifier l\'article' : 'Nouvel article',
+              style: const TextStyle(fontSize: 17, color: Colors.white)),
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(16),

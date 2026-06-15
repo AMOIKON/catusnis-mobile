@@ -267,14 +267,12 @@ class DeploymentFormProvider extends ChangeNotifier {
   DeploymentFormProvider({DeploymentService? service})
       : _service = service ?? DeploymentService();
 
-  // Données de référence
   List<Map<String, dynamic>> _regions = [];
   List<Map<String, dynamic>> _districts = [];
   List<Map<String, dynamic>> _healths = [];
   List<Map<String, dynamic>> _apps = [];
   List<Map<String, dynamic>> _partners = [];
 
-  // Sélections
   Map<String, dynamic>? _selectedRegion;
   Map<String, dynamic>? _selectedDistrict;
   Map<String, dynamic>? _selectedHealth;
@@ -282,10 +280,8 @@ class DeploymentFormProvider extends ChangeNotifier {
   Map<String, dynamic>? _selectedPartnerPrincipal;
   Map<String, dynamic>? _selectedPartnerSecondaire;
 
-  // Équipements
   final List<EquipementLigne> _equipementLignes = [];
 
-  // États
   bool _loadingRef = false;
   bool _loadingDistricts = false;
   bool _loadingHealths = false;
@@ -295,7 +291,6 @@ class DeploymentFormProvider extends ChangeNotifier {
   DeploymentModel? _deploymentEnEdition;
   bool get isEdit => _deploymentEnEdition != null;
 
-  // Getters
   List<Map<String, dynamic>> get regions => _regions;
   List<Map<String, dynamic>> get districts => _districts;
   List<Map<String, dynamic>> get healths => _healths;
@@ -347,12 +342,9 @@ class DeploymentFormProvider extends ChangeNotifier {
 
   Future<void> _preselecterPourEdition(DeploymentModel dep) async {
     _deploymentEnEdition = dep;
-
     _selectedApp = _apps.where((a) => a['id'] == dep.app?.id).firstOrNull;
-
     _selectedPartnerPrincipal =
         _partners.where((p) => p['id'] == dep.partnerPrincipal?.id).firstOrNull;
-
     _selectedPartnerSecondaire = _partners
         .where((p) => p['id'] == dep.partnerSecondaire?.id)
         .firstOrNull;
@@ -494,12 +486,15 @@ class DeploymentFormProvider extends ChangeNotifier {
   }
 
   // ── Soumission ────────────────────────────────────────────────────────────
+  // ✅ latitude et longitude ajoutés comme paramètres nommés optionnels
 
   Future<DeploymentModel?> soumettre(
     String codeDep,
     String? dateReception,
-    String? observations,
-  ) async {
+    String? observations, {
+    double? latitude,
+    double? longitude,
+  }) async {
     if (_selectedRegion == null ||
         _selectedDistrict == null ||
         _selectedHealth == null) {
@@ -519,7 +514,13 @@ class DeploymentFormProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    final body = _construireBody(codeDep, dateReception, observations);
+    final body = _construireBody(
+      codeDep,
+      dateReception,
+      observations,
+      latitude: latitude,
+      longitude: longitude,
+    );
 
     try {
       final result = isEdit
@@ -536,33 +537,21 @@ class DeploymentFormProvider extends ChangeNotifier {
     }
   }
 
-  // ── _construireBody ───────────────────────────────────────────────────────
-  //
-  // DeploymentRequest.java :
-  //   @NotBlank  String        codeDep
-  //   @NotNull   LocalDateTime dateRecep   ← jamais null, fallback = today
-  //              String        comment
-  //   @NotNull   Integer       regionId
-  //   @NotNull   Integer       districtId
-  //   @NotNull   Integer       healthId
-  //              Integer       appsId
-  //              Integer       partnerId
-  //   List<DeploymentItemRequest> items → { acquisitionId, status }
+  // ── Construction du body ──────────────────────────────────────────────────
 
   Map<String, dynamic> _construireBody(
     String codeDep,
     String? dateReception,
-    String? observations,
-  ) {
-    // ✅ dateRecep est @NotNull — on garantit toujours une valeur
+    String? observations, {
+    double? latitude,
+    double? longitude,
+  }) {
     final String dateRecep;
     if (dateReception != null && dateReception.isNotEmpty) {
-      // "2025-01-12" → "2025-01-12T00:00:00"
       dateRecep = dateReception.contains('T')
           ? dateReception
           : '${dateReception}T00:00:00';
     } else {
-      // Fallback : date du jour
       final now = DateTime.now();
       final y = now.year;
       final m = now.month.toString().padLeft(2, '0');
@@ -579,6 +568,9 @@ class DeploymentFormProvider extends ChangeNotifier {
       'healthId': _selectedHealth!['id'],
       'appsId': _selectedApp?['id'],
       'partnerId': _selectedPartnerPrincipal?['id'],
+      // ── Géolocalisation ────────────────────────────────────────────────
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
       'items': _equipementLignes
           .map((l) => {
                 'acquisitionId': l.acquisitionId,

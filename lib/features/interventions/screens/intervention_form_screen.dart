@@ -5,13 +5,13 @@ import 'package:provider/provider.dart';
 import '../../../core/api/api_constants.dart';
 import '../../../core/api/dio_client.dart';
 import '../../../core/services/connectivity_service.dart';
+import '../../../core/services/location_service.dart';
 import '../../../core/services/sync_service.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../models/intervention_model.dart';
 import '../services/intervention_form_service.dart';
 
 class InterventionFormScreen extends StatefulWidget {
-  /// null = mode création, non-null = mode édition
   final InterventionModel? intervention;
   const InterventionFormScreen({super.key, this.intervention});
   @override
@@ -21,6 +21,7 @@ class InterventionFormScreen extends StatefulWidget {
 class _InterventionFormScreenState extends State<InterventionFormScreen> {
   final InterventionFormService _service = InterventionFormService();
   final DioClient _dio = DioClient();
+  final _locationService = LocationService();
   final _formKey = GlobalKey<FormState>();
   final _commentCtrl = TextEditingController();
   final _durationCtrl = TextEditingController(text: '30');
@@ -46,6 +47,10 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
   Map<int, bool> _selectedItemIds = {};
   Map<int, String> _etatsAvant = {};
   Map<int, String> _etatsApres = {};
+
+  // ── Géolocalisation ────────────────────────────────────────────────────────
+  LocationResult? _location;
+  bool _locLoading = false;
 
   bool _loading = false;
   bool _submitting = false;
@@ -88,6 +93,8 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
       }
     }
     _initData();
+    // Capturer GPS automatiquement à l'ouverture (création uniquement)
+    if (!_isEdit) _captureLocation();
   }
 
   @override
@@ -98,6 +105,16 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
     _personContactCtrl.dispose();
     _personPostCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _captureLocation() async {
+    setState(() => _locLoading = true);
+    final result = await _locationService.getCurrentLocation();
+    if (mounted)
+      setState(() {
+        _location = result;
+        _locLoading = false;
+      });
   }
 
   Future<void> _initData() async {
@@ -132,7 +149,6 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
       _selectedApp =
           _apps.where((a) => a['appName'] == inter.appName).firstOrNull;
     });
-    // Déploiement par code
     final dep = _deployments
         .where((d) => d['codeDep'] == inter.deploymentCode)
         .firstOrNull;
@@ -214,10 +230,15 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
       'typesId': _selectedType?['id'],
       'appsId': _selectedApp?['id'] ?? dep['appsId'],
       'enAttenteMaintenance': _enAttente,
+      // ── Géolocalisation ──────────────────────────────────────────────────
+      if (_location != null) ...{
+        'latitude': _location!.latitude,
+        'longitude': _location!.longitude,
+      },
       if (!_isEdit) ...{
         'selectedItemIds': selectedIds,
         'etatsAvant': etatsAvant,
-        'etatsApres': etatsApres
+        'etatsApres': etatsApres,
       },
     };
     if (_showPerson && _personNameCtrl.text.isNotEmpty) {
@@ -276,6 +297,25 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
                     Text(subtitle,
                         style: const TextStyle(color: AppTheme.gray),
                         textAlign: TextAlign.center)
+                  ],
+                  // Afficher les coordonnées dans le dialog de succès
+                  if (_location != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                          color: AppTheme.success.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.location_on,
+                            size: 13, color: AppTheme.success),
+                        const SizedBox(width: 4),
+                        Text(_location!.label,
+                            style: const TextStyle(
+                                fontSize: 10, color: AppTheme.success)),
+                      ]),
+                    ),
                   ],
                 ]),
                 actions: [
@@ -343,6 +383,13 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (isOffline && !_isEdit) _offlineBanner(),
+
+                        // ── Géolocalisation ──────────────────────────────────────
+                        _sectionTitle(
+                            'Localisation GPS', Icons.gps_fixed_outlined),
+                        _card([_buildLocationWidget()]),
+
+                        // ── Type intervention ────────────────────────────────────
                         _sectionTitle(
                             'Type d\'intervention', Icons.tune_outlined),
                         _card([
@@ -410,6 +457,8 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
                               onChanged: (v) =>
                                   setState(() => _actionInter = v!)),
                         ]),
+
+                        // ── Déploiement ──────────────────────────────────────────
                         _sectionTitle('Déploiement concerné',
                             Icons.local_shipping_outlined),
                         _card([
@@ -434,12 +483,15 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
                             ]),
                           ],
                         ]),
+
                         if (_depItems.isNotEmpty && !_isEdit) ...[
                           _sectionTitle(
                               'Équipements (${_selectedItemIds.values.where((v) => v).length} sélectionné(s))',
                               Icons.devices_outlined),
                           ..._depItems.map((item) => _buildItemTile(item)),
                         ],
+
+                        // ── Détails ──────────────────────────────────────────────
                         _sectionTitle('Détails', Icons.info_outline),
                         _card([
                           GestureDetector(
@@ -525,6 +577,8 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
                               activeColor: AppTheme.primary,
                               contentPadding: EdgeInsets.zero),
                         ]),
+
+                        // ── Personne assistée ────────────────────────────────────
                         _sectionTitle('Personne assistée (optionnel)',
                             Icons.person_outline),
                         _card([
@@ -554,6 +608,7 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
                                 icon: Icons.work_outline),
                           ],
                         ]),
+
                         const SizedBox(height: 80),
                       ]))),
       floatingActionButton: FloatingActionButton.extended(
@@ -573,6 +628,88 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
             : (isOffline ? Colors.orange : AppTheme.primary),
       ),
     );
+  }
+
+  // ── Widget GPS ─────────────────────────────────────────────────────────────
+  Widget _buildLocationWidget() {
+    if (_locLoading) {
+      return const Row(children: [
+        SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+                strokeWidth: 2, color: AppTheme.primary)),
+        SizedBox(width: 12),
+        Text('Localisation en cours…',
+            style: TextStyle(fontSize: 13, color: AppTheme.gray)),
+      ]);
+    }
+    if (_location != null) {
+      return Row(children: [
+        Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+                color: AppTheme.success.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10)),
+            child:
+                const Icon(Icons.gps_fixed, color: AppTheme.success, size: 20)),
+        const SizedBox(width: 12),
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Position capturée ✓',
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: AppTheme.success)),
+          Text(_location!.label,
+              style: const TextStyle(fontSize: 11, color: AppTheme.gray)),
+          if (_location!.accuracy != null)
+            Text('Précision : ±${_location!.accuracy!.toStringAsFixed(0)} m',
+                style: const TextStyle(fontSize: 10, color: AppTheme.gray)),
+        ])),
+        GestureDetector(
+          onTap: _captureLocation,
+          child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8)),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.refresh, size: 14, color: AppTheme.primary),
+                SizedBox(width: 4),
+                Text('Actualiser',
+                    style: TextStyle(fontSize: 11, color: AppTheme.primary)),
+              ])),
+        ),
+      ]);
+    }
+    return Row(children: [
+      Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+              color: AppTheme.warning.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10)),
+          child: const Icon(Icons.gps_off, color: AppTheme.warning, size: 20)),
+      const SizedBox(width: 12),
+      const Expanded(
+          child: Text('Position non disponible',
+              style: TextStyle(fontSize: 13, color: AppTheme.gray))),
+      GestureDetector(
+        onTap: _captureLocation,
+        child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+                color: AppTheme.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8)),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.my_location, size: 14, color: AppTheme.primary),
+              SizedBox(width: 4),
+              Text('Localiser',
+                  style: TextStyle(fontSize: 11, color: AppTheme.primary)),
+            ])),
+      ),
+    ]);
   }
 
   Widget _offlineBanner() => Container(
@@ -619,10 +756,11 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
       child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, children: children));
 
-  Widget _buildSimpleField(
-          {required TextEditingController controller,
-          required String label,
-          required IconData icon}) =>
+  Widget _buildSimpleField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+  }) =>
       TextFormField(
           controller: controller,
           decoration: InputDecoration(
@@ -634,13 +772,14 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
                   borderRadius: BorderRadius.circular(10),
                   borderSide: BorderSide.none)));
 
-  Widget _buildDropdown<T>(
-          {required String label,
-          required IconData icon,
-          required T? value,
-          required List<T> items,
-          required String Function(T) display,
-          required void Function(T?)? onChanged}) =>
+  Widget _buildDropdown<T>({
+    required String label,
+    required IconData icon,
+    required T? value,
+    required List<T> items,
+    required String Function(T) display,
+    required void Function(T?)? onChanged,
+  }) =>
       DropdownButtonFormField<T>(
           value: value,
           isExpanded: true,

@@ -79,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case AppRoute.technicianSites:
         return 'Sites attribués';
       case AppRoute.booklets:
-        return 'Cahiers de santé';
+        return 'Booklets';
       case AppRoute.notifications: // ✅ AJOUT
         return 'Notifications';
     }

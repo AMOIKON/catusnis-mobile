@@ -53,6 +53,7 @@ dependencies:
   # ── Notifications push ────────────────────────────────────────────────────
   firebase_messaging:          ^15.0.0
   flutter_local_notifications: ^17.0.0
+  geolocator: ^14.0.2
 
 dev_dependencies:
   flutter_test:

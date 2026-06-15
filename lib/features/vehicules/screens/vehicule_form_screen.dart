@@ -115,7 +115,8 @@ class _VehiculeFormScreenState extends State<VehiculeFormScreen> {
       appBar: AppBar(
         backgroundColor: _kGreen,
         foregroundColor: Colors.white,
-        title: Text(_isEdit ? 'Modifier l\'engin' : 'Nouvel engin'),
+        title: Text(_isEdit ? 'Modifier l\'engin' : 'Nouvel engin',
+            style: const TextStyle(fontSize: 17, color: Colors.white)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
