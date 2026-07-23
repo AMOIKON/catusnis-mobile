@@ -8,6 +8,9 @@ import '../../../core/services/connectivity_service.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/services/sync_service.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../deployments/services/deployment_service.dart';
+import '../../structures/models/structure_model.dart';
+import '../../structures/services/structure_service.dart';
 import '../models/intervention_model.dart';
 import '../services/intervention_form_service.dart';
 
@@ -22,18 +25,32 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
   final InterventionFormService _service = InterventionFormService();
   final DioClient _dio = DioClient();
   final _locationService = LocationService();
+  final _refService = DeploymentService();
+  final _structureService = StructureService();
   final _formKey = GlobalKey<FormState>();
   final _commentCtrl = TextEditingController();
   final _durationCtrl = TextEditingController(text: '30');
   final _personNameCtrl = TextEditingController();
   final _personContactCtrl = TextEditingController();
   final _personPostCtrl = TextEditingController();
+  // ── Mode Appel / Orientation ─────────────────────────────────────────────
+  final _structureNomCtrl = TextEditingController();
 
   List<Map<String, dynamic>> _deployments = [];
   List<Map<String, dynamic>> _evaluations = [];
   List<Map<String, dynamic>> _types = [];
   List<Map<String, dynamic>> _apps = [];
   List<Map<String, dynamic>> _depItems = [];
+
+  // ── Référentiels pour le mode Appel / Orientation ────────────────────────
+  List<Map<String, dynamic>> _regions = [];
+  List<Map<String, dynamic>> _districts = [];
+  List<StructureModel> _structures = [];
+  Map<String, dynamic>? _selectedRegionCall;
+  Map<String, dynamic>? _selectedDistrictCall;
+  StructureModel? _selectedStructure;
+  bool _loadingDistrictsCall = false;
+  bool _loadingStructures = false;
 
   String _typeInter = 'SUR_SITE';
   String _actionInter = 'MAINTENANCE_CURATIVE';
@@ -47,6 +64,9 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
   Map<int, bool> _selectedItemIds = {};
   Map<int, String> _etatsAvant = {};
   Map<int, String> _etatsApres = {};
+
+  // ── Mode Appel / Orientation ─────────────────────────────────────────────
+  bool _isCallOnly = false;
 
   // ── Géolocalisation ────────────────────────────────────────────────────────
   LocationResult? _location;
@@ -62,6 +82,11 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
     'MAINTENANCE_CURATIVE',
     'MAINTENANCE_PREVENTIVE',
     'INSTALLATION'
+  ];
+  // ── Actions dédiées au mode Appel / Orientation ──────────────────────────
+  final List<String> _callActionOptions = [
+    'ORIENTATION_TECHNIQUE',
+    'ASSISTANCE_TECHNIQUE',
   ];
   final List<String> _etatsOptions = [
     'FONCTIONNEL',
@@ -91,6 +116,12 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
         _personContactCtrl.text = inter.personContact ?? '';
         _personPostCtrl.text = inter.personPost ?? '';
       }
+      // ── Détection du mode Appel / Orientation en édition ───────────────────
+      if (_callActionOptions.contains(inter.actionInter) &&
+          inter.regionId == null) {
+        _isCallOnly = true;
+        _structureNomCtrl.text = inter.structureEtatiqueName ?? '';
+      }
     }
     _initData();
     // Capturer GPS automatiquement à l'ouverture (création uniquement)
@@ -104,6 +135,7 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
     _personNameCtrl.dispose();
     _personContactCtrl.dispose();
     _personPostCtrl.dispose();
+    _structureNomCtrl.dispose();
     super.dispose();
   }
 
@@ -125,17 +157,47 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
         _service.getEvaluations(),
         _service.getTypes(),
         _service.getApps(),
+        _refService.getRegions(),
       ]);
       setState(() {
         _deployments = results[0];
         _evaluations = results[1];
         _types = results[2];
         _apps = results[3];
+        _regions = results[4];
         _loading = false;
       });
+      await _loadStructures();
       if (_isEdit) await _preselectForEdit();
     } catch (e) {
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadStructures() async {
+    setState(() => _loadingStructures = true);
+    try {
+      _structures = await _structureService.getAllList();
+    } catch (_) {
+      _structures = [];
+    } finally {
+      if (mounted) setState(() => _loadingStructures = false);
+    }
+  }
+
+  Future<void> _onRegionCallChanged(Map<String, dynamic>? region) async {
+    setState(() {
+      _selectedRegionCall = region;
+      _selectedDistrictCall = null;
+      _districts = [];
+    });
+    if (region == null) return;
+    setState(() => _loadingDistrictsCall = true);
+    try {
+      final districts = await _refService.getDistricts(region['id'] as int);
+      if (mounted) setState(() => _districts = districts);
+    } finally {
+      if (mounted) setState(() => _loadingDistrictsCall = false);
     }
   }
 
@@ -149,6 +211,14 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
       _selectedApp =
           _apps.where((a) => a['appName'] == inter.appName).firstOrNull;
     });
+    if (_isCallOnly) {
+      if (inter.structureEtatiqueId != null) {
+        _selectedStructure = _structures
+            .where((s) => s.id == inter.structureEtatiqueId)
+            .firstOrNull;
+      }
+      return;
+    }
     final dep = _deployments
         .where((d) => d['codeDep'] == inter.deploymentCode)
         .firstOrNull;
@@ -176,6 +246,31 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
     } catch (_) {}
   }
 
+  void _toggleCallOnly(bool value) {
+    setState(() {
+      _isCallOnly = value;
+      if (value) {
+        // Bascule l'action vers une action valide pour le mode appel
+        if (!_callActionOptions.contains(_actionInter)) {
+          _actionInter = _callActionOptions.first;
+        }
+        // Réinitialise les champs du mode standard non pertinents ici
+        _selectedDeployment = null;
+        _depItems = [];
+        _selectedItemIds = {};
+      } else {
+        // Retour au mode standard : réinitialise l'action si besoin
+        if (_callActionOptions.contains(_actionInter)) {
+          _actionInter = _actionInterOptions.first;
+        }
+        _selectedStructure = null;
+        _selectedRegionCall = null;
+        _selectedDistrictCall = null;
+        _structureNomCtrl.clear();
+      }
+    });
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
         context: context,
@@ -187,34 +282,25 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedDeployment == null) {
-      _showError('Veuillez sélectionner un déploiement.');
-      return;
-    }
-    if (_selectedEvaluation == null) {
-      _showError('Veuillez sélectionner une évaluation.');
-      return;
-    }
-    if (!_isEdit && _selectedItemIds.values.every((v) => !v)) {
-      _showError('Veuillez sélectionner au moins un équipement.');
-      return;
+
+    if (!_isCallOnly) {
+      if (_selectedDeployment == null) {
+        _showError('Veuillez sélectionner un déploiement.');
+        return;
+      }
+      if (_selectedEvaluation == null) {
+        _showError('Veuillez sélectionner une évaluation.');
+        return;
+      }
+      if (!_isEdit && _selectedItemIds.values.every((v) => !v)) {
+        _showError('Veuillez sélectionner au moins un équipement.');
+        return;
+      }
     }
 
     final connectivity = context.read<ConnectivityService>();
     final sync = context.read<SyncService>();
     setState(() => _submitting = true);
-
-    final dep = _selectedDeployment!;
-    final selectedIds = _selectedItemIds.entries
-        .where((e) => e.value)
-        .map((e) => e.key)
-        .toList();
-    final etatsAvant = <String, String>{};
-    final etatsApres = <String, String>{};
-    for (final id in selectedIds) {
-      if (_etatsAvant[id] != null) etatsAvant[id.toString()] = _etatsAvant[id]!;
-      if (_etatsApres[id] != null) etatsApres[id.toString()] = _etatsApres[id]!;
-    }
 
     final body = <String, dynamic>{
       'typeInter': _typeInter,
@@ -222,25 +308,56 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
       'commentInter': _commentCtrl.text.trim(),
       'dateInter': _selectedDate.toIso8601String(),
       'durationMinutes': int.tryParse(_durationCtrl.text) ?? 30,
-      'regionId': dep['regionId'],
-      'districtId': dep['districtId'],
-      'healthId': dep['healthId'],
-      'deploymentId': dep['id'],
-      'evaluationId': _selectedEvaluation!['id'],
-      'typesId': _selectedType?['id'],
-      'appsId': _selectedApp?['id'] ?? dep['appsId'],
       'enAttenteMaintenance': _enAttente,
-      // ── Géolocalisation ──────────────────────────────────────────────────
       if (_location != null) ...{
         'latitude': _location!.latitude,
         'longitude': _location!.longitude,
       },
-      if (!_isEdit) ...{
-        'selectedItemIds': selectedIds,
-        'etatsAvant': etatsAvant,
-        'etatsApres': etatsApres,
-      },
     };
+
+    if (_isCallOnly) {
+      // ── Mode Appel / Orientation : pas de déploiement/évaluation requis ──
+      if (_selectedRegionCall != null) {
+        body['regionId'] = _selectedRegionCall!['id'];
+      }
+      if (_selectedDistrictCall != null) {
+        body['districtId'] = _selectedDistrictCall!['id'];
+      }
+      if (_selectedStructure != null) {
+        body['structureEtatiqueId'] = _selectedStructure!.id;
+      } else if (_structureNomCtrl.text.trim().isNotEmpty) {
+        body['structureEtatiqueNom'] = _structureNomCtrl.text.trim();
+      }
+    } else {
+      final dep = _selectedDeployment!;
+      final selectedIds = _selectedItemIds.entries
+          .where((e) => e.value)
+          .map((e) => e.key)
+          .toList();
+      final etatsAvant = <String, String>{};
+      final etatsApres = <String, String>{};
+      for (final id in selectedIds) {
+        if (_etatsAvant[id] != null)
+          etatsAvant[id.toString()] = _etatsAvant[id]!;
+        if (_etatsApres[id] != null)
+          etatsApres[id.toString()] = _etatsApres[id]!;
+      }
+      body.addAll({
+        'regionId': dep['regionId'],
+        'districtId': dep['districtId'],
+        'healthId': dep['healthId'],
+        'deploymentId': dep['id'],
+        'evaluationId': _selectedEvaluation!['id'],
+        'typesId': _selectedType?['id'],
+        'appsId': _selectedApp?['id'] ?? dep['appsId'],
+        if (!_isEdit) ...{
+          'selectedItemIds': selectedIds,
+          'etatsAvant': etatsAvant,
+          'etatsApres': etatsApres,
+        },
+      });
+    }
+
     if (_showPerson && _personNameCtrl.text.isNotEmpty) {
       body['manualPersonName'] = _personNameCtrl.text.trim();
       body['manualPersonContact'] = _personContactCtrl.text.trim();
@@ -384,6 +501,30 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
                       children: [
                         if (isOffline && !_isEdit) _offlineBanner(),
 
+                        // ── Mode Appel / Orientation ─────────────────────────────
+                        _sectionTitle(
+                            'Mode de saisie', Icons.phone_in_talk_outlined),
+                        _card([
+                          Material(
+                            color: Colors.transparent,
+                            child: SwitchListTile(
+                                value: _isCallOnly,
+                                onChanged: _toggleCallOnly,
+                                title: const Text(
+                                    'Appel / Orientation (sans site)',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.dark)),
+                                subtitle: const Text(
+                                    'Appel entrant sans lien avec un équipement/site précis',
+                                    style: TextStyle(
+                                        fontSize: 11, color: AppTheme.gray)),
+                                activeColor: AppTheme.primary,
+                                contentPadding: EdgeInsets.zero),
+                          ),
+                        ]),
+
                         // ── Géolocalisation ──────────────────────────────────────
                         _sectionTitle(
                             'Localisation GPS', Icons.gps_fixed_outlined),
@@ -441,7 +582,9 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
                               label: 'Action *',
                               icon: Icons.build_outlined,
                               value: _actionInter,
-                              items: _actionInterOptions,
+                              items: _isCallOnly
+                                  ? _callActionOptions
+                                  : _actionInterOptions,
                               display: (a) {
                                 switch (a) {
                                   case 'MAINTENANCE_CURATIVE':
@@ -450,6 +593,10 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
                                     return 'Maintenance préventive';
                                   case 'INSTALLATION':
                                     return 'Installation';
+                                  case 'ORIENTATION_TECHNIQUE':
+                                    return 'Orientation technique';
+                                  case 'ASSISTANCE_TECHNIQUE':
+                                    return 'Assistance technique';
                                   default:
                                     return a;
                                 }
@@ -458,33 +605,128 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
                                   setState(() => _actionInter = v!)),
                         ]),
 
-                        // ── Déploiement ──────────────────────────────────────────
-                        _sectionTitle('Déploiement concerné',
-                            Icons.local_shipping_outlined),
-                        _card([
-                          _buildDropdown<Map<String, dynamic>>(
-                              label: 'Déploiement *',
-                              icon: Icons.alt_route_outlined,
-                              value: _selectedDeployment,
-                              items: _deployments,
-                              display: (d) =>
-                                  '${d['codeDep']} — ${d['healthDeploy'] ?? ''}',
-                              onChanged: _onDeploymentChanged),
-                          if (_selectedDeployment != null) ...[
-                            const SizedBox(height: 8),
-                            Row(children: [
-                              const Icon(Icons.location_on_outlined,
-                                  size: 13, color: AppTheme.gray),
-                              const SizedBox(width: 4),
-                              Text(
-                                  '${_selectedDeployment!['districtDeploy'] ?? ''} • ${_selectedDeployment!['regionDeploy'] ?? ''}',
-                                  style: const TextStyle(
-                                      fontSize: 12, color: AppTheme.gray))
-                            ]),
-                          ],
-                        ]),
+                        // ── Bloc Appel / Orientation ─────────────────────────────
+                        if (_isCallOnly) ...[
+                          _sectionTitle('Structure appelante',
+                              Icons.account_balance_outlined),
+                          _card([
+                            _loadingStructures
+                                ? const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 8),
+                                    child: Row(children: [
+                                      SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: AppTheme.primary)),
+                                      SizedBox(width: 10),
+                                      Text('Chargement des structures…',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              color: AppTheme.gray)),
+                                    ]),
+                                  )
+                                : _buildDropdown<StructureModel>(
+                                    label: 'Structure existante (optionnel)',
+                                    icon: Icons.account_balance_outlined,
+                                    value: _selectedStructure,
+                                    items: _structures,
+                                    display: (s) => s.nom,
+                                    onChanged: (v) => setState(() {
+                                          _selectedStructure = v;
+                                          if (v != null)
+                                            _structureNomCtrl.clear();
+                                        })),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                                controller: _structureNomCtrl,
+                                enabled: _selectedStructure == null,
+                                onChanged: (_) => setState(() {}),
+                                decoration: InputDecoration(
+                                    labelText:
+                                        'Ou saisir le nom d\'une nouvelle structure',
+                                    prefixIcon: const Icon(Icons.edit_outlined,
+                                        size: 18, color: AppTheme.gray),
+                                    filled: true,
+                                    fillColor: Colors.grey[100],
+                                    border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: BorderSide.none))),
+                            const SizedBox(height: 12),
+                            _buildDropdown<Map<String, dynamic>>(
+                                label: 'Région (optionnel)',
+                                icon: Icons.map_outlined,
+                                value: _selectedRegionCall,
+                                items: _regions,
+                                display: (r) =>
+                                    r['regionName'] as String? ?? '',
+                                onChanged: _onRegionCallChanged),
+                            const SizedBox(height: 12),
+                            _loadingDistrictsCall
+                                ? const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 8),
+                                    child: Row(children: [
+                                      SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: AppTheme.primary)),
+                                      SizedBox(width: 10),
+                                      Text('Chargement des districts…',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              color: AppTheme.gray)),
+                                    ]),
+                                  )
+                                : _buildDropdown<Map<String, dynamic>>(
+                                    label: 'District (optionnel)',
+                                    icon: Icons.location_city_outlined,
+                                    value: _selectedDistrictCall,
+                                    items: _districts,
+                                    display: (d) =>
+                                        d['DistrictName'] as String? ??
+                                        d['districtName'] as String? ??
+                                        '',
+                                    onChanged: _districts.isEmpty
+                                        ? null
+                                        : (v) => setState(
+                                            () => _selectedDistrictCall = v)),
+                          ]),
+                        ],
 
-                        if (_depItems.isNotEmpty && !_isEdit) ...[
+                        // ── Déploiement (mode standard uniquement) ───────────────
+                        if (!_isCallOnly) ...[
+                          _sectionTitle('Déploiement concerné',
+                              Icons.local_shipping_outlined),
+                          _card([
+                            _buildDropdown<Map<String, dynamic>>(
+                                label: 'Déploiement *',
+                                icon: Icons.alt_route_outlined,
+                                value: _selectedDeployment,
+                                items: _deployments,
+                                display: (d) =>
+                                    '${d['codeDep']} — ${d['healthDeploy'] ?? ''}',
+                                onChanged: _onDeploymentChanged),
+                            if (_selectedDeployment != null) ...[
+                              const SizedBox(height: 8),
+                              Row(children: [
+                                const Icon(Icons.location_on_outlined,
+                                    size: 13, color: AppTheme.gray),
+                                const SizedBox(width: 4),
+                                Text(
+                                    '${_selectedDeployment!['districtDeploy'] ?? ''} • ${_selectedDeployment!['regionDeploy'] ?? ''}',
+                                    style: const TextStyle(
+                                        fontSize: 12, color: AppTheme.gray))
+                              ]),
+                            ],
+                          ]),
+                        ],
+
+                        if (_depItems.isNotEmpty &&
+                            !_isEdit &&
+                            !_isCallOnly) ...[
                           _sectionTitle(
                               'Équipements (${_selectedItemIds.values.where((v) => v).length} sélectionné(s))',
                               Icons.devices_outlined),
@@ -525,34 +767,36 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
                                   border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10),
                                       borderSide: BorderSide.none))),
-                          const SizedBox(height: 12),
-                          _buildDropdown<Map<String, dynamic>>(
-                              label: 'Type équipement',
-                              icon: Icons.devices_outlined,
-                              value: _selectedType,
-                              items: _types,
-                              display: (t) =>
-                                  '${t['typeName']} — ${t['marque'] ?? ''}',
-                              onChanged: (v) =>
-                                  setState(() => _selectedType = v)),
-                          const SizedBox(height: 12),
-                          _buildDropdown<Map<String, dynamic>>(
-                              label: 'Application',
-                              icon: Icons.apps_outlined,
-                              value: _selectedApp,
-                              items: _apps,
-                              display: (a) => a['appName'] as String? ?? '',
-                              onChanged: (v) =>
-                                  setState(() => _selectedApp = v)),
-                          const SizedBox(height: 12),
-                          _buildDropdown<Map<String, dynamic>>(
-                              label: 'Évaluation *',
-                              icon: Icons.star_outline,
-                              value: _selectedEvaluation,
-                              items: _evaluations,
-                              display: (e) => e['evlName'] as String? ?? '',
-                              onChanged: (v) =>
-                                  setState(() => _selectedEvaluation = v)),
+                          if (!_isCallOnly) ...[
+                            const SizedBox(height: 12),
+                            _buildDropdown<Map<String, dynamic>>(
+                                label: 'Type équipement',
+                                icon: Icons.devices_outlined,
+                                value: _selectedType,
+                                items: _types,
+                                display: (t) =>
+                                    '${t['typeName']} — ${t['marque'] ?? ''}',
+                                onChanged: (v) =>
+                                    setState(() => _selectedType = v)),
+                            const SizedBox(height: 12),
+                            _buildDropdown<Map<String, dynamic>>(
+                                label: 'Application',
+                                icon: Icons.apps_outlined,
+                                value: _selectedApp,
+                                items: _apps,
+                                display: (a) => a['appName'] as String? ?? '',
+                                onChanged: (v) =>
+                                    setState(() => _selectedApp = v)),
+                            const SizedBox(height: 12),
+                            _buildDropdown<Map<String, dynamic>>(
+                                label: 'Évaluation *',
+                                icon: Icons.star_outline,
+                                value: _selectedEvaluation,
+                                items: _evaluations,
+                                display: (e) => e['evlName'] as String? ?? '',
+                                onChanged: (v) =>
+                                    setState(() => _selectedEvaluation = v)),
+                          ],
                           const SizedBox(height: 12),
                           TextFormField(
                               controller: _commentCtrl,
@@ -567,29 +811,39 @@ class _InterventionFormScreenState extends State<InterventionFormScreen> {
                                   border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10),
                                       borderSide: BorderSide.none))),
-                          const SizedBox(height: 12),
-                          SwitchListTile(
-                              value: _enAttente,
-                              onChanged: (v) => setState(() => _enAttente = v),
-                              title: const Text('En attente de maintenance',
-                                  style: TextStyle(
-                                      fontSize: 13, color: AppTheme.dark)),
-                              activeColor: AppTheme.primary,
-                              contentPadding: EdgeInsets.zero),
+                          if (!_isCallOnly) ...[
+                            const SizedBox(height: 12),
+                            Material(
+                              color: Colors.transparent,
+                              child: SwitchListTile(
+                                  value: _enAttente,
+                                  onChanged: (v) =>
+                                      setState(() => _enAttente = v),
+                                  title: const Text('En attente de maintenance',
+                                      style: TextStyle(
+                                          fontSize: 13, color: AppTheme.dark)),
+                                  activeColor: AppTheme.primary,
+                                  contentPadding: EdgeInsets.zero),
+                            ),
+                          ],
                         ]),
 
                         // ── Personne assistée ────────────────────────────────────
                         _sectionTitle('Personne assistée (optionnel)',
                             Icons.person_outline),
                         _card([
-                          SwitchListTile(
-                              value: _showPerson,
-                              onChanged: (v) => setState(() => _showPerson = v),
-                              title: const Text('Renseigner une personne',
-                                  style: TextStyle(
-                                      fontSize: 13, color: AppTheme.dark)),
-                              activeColor: AppTheme.primary,
-                              contentPadding: EdgeInsets.zero),
+                          Material(
+                            color: Colors.transparent,
+                            child: SwitchListTile(
+                                value: _showPerson,
+                                onChanged: (v) =>
+                                    setState(() => _showPerson = v),
+                                title: const Text('Renseigner une personne',
+                                    style: TextStyle(
+                                        fontSize: 13, color: AppTheme.dark)),
+                                activeColor: AppTheme.primary,
+                                contentPadding: EdgeInsets.zero),
+                          ),
                           if (_showPerson) ...[
                             const SizedBox(height: 8),
                             _buildSimpleField(

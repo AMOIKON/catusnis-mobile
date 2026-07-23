@@ -8,6 +8,7 @@ class InterventionModel {
   final String? commentInter;
   final String? dateInter;
   final int? durationMinutes;
+  final int? regionId;
   final String? regionName;
   final String? districtName;
   final String? healthName;
@@ -21,6 +22,8 @@ class InterventionModel {
   final String? personContact;
   final String? personPost;
   final bool enAttenteMaintenance;
+  final int? structureEtatiqueId;
+  final String? structureEtatiqueName;
   final List<InterventionItemModel> deploymentItems;
 
   InterventionModel({
@@ -31,6 +34,7 @@ class InterventionModel {
     this.commentInter,
     this.dateInter,
     this.durationMinutes,
+    this.regionId,
     this.regionName,
     this.districtName,
     this.healthName,
@@ -44,6 +48,8 @@ class InterventionModel {
     this.personContact,
     this.personPost,
     this.enAttenteMaintenance = false,
+    this.structureEtatiqueId,
+    this.structureEtatiqueName,
     this.deploymentItems = const [],
   });
 
@@ -56,6 +62,7 @@ class InterventionModel {
       commentInter: json['commentInter'],
       dateInter: json['dateInter'],
       durationMinutes: json['durationMinutes'],
+      regionId: json['regionId'],
       regionName: json['regionName'],
       districtName: json['districtName'],
       healthName: json['healthName'],
@@ -69,6 +76,8 @@ class InterventionModel {
       personContact: json['personContact'],
       personPost: json['personPost'],
       enAttenteMaintenance: json['enAttenteMaintenance'] ?? false,
+      structureEtatiqueId: json['structureEtatiqueId'],
+      structureEtatiqueName: json['structureEtatiqueName'],
       deploymentItems: (json['deploymentItems'] as List<dynamic>? ?? [])
           .map((e) => InterventionItemModel.fromJson(e))
           .toList(),
