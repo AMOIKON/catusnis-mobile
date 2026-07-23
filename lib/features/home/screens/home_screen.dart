@@ -7,7 +7,7 @@ import '../../../core/services/sync_service.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import '../../../shared/widgets/catusnis_logo.dart';
 import '../../../shared/widgets/offline_banner.dart';
-import '../../../shared/widgets/NotificationBadge.dart'; // ✅ AJOUT
+import '../../../shared/widgets/NotificationBadge.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../dashboard/screens/dashboard_screen.dart';
 import '../../acquisitions/screens/acquisition_screen.dart';
@@ -18,8 +18,9 @@ import '../../vehicules/screens/vehicule_screen.dart';
 import '../../fournitures/screens/fourniture_screen.dart';
 import '../../technician_sites/screens/technician_site_screen.dart';
 import '../../booklets/screens/booklet_screen.dart';
-import '../../notifications/providers/NotificationProvider.dart'; // ✅ AJOUT
-import '../../notifications/screens/NotificationScreen.dart'; // ✅ AJOUT
+import '../../structures/screens/structure_list_screen.dart'; // ✅ AJOUT
+import '../../notifications/providers/NotificationProvider.dart';
+import '../../notifications/screens/NotificationScreen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Enum centralisé — partagé avec AppDrawer
@@ -34,7 +35,8 @@ enum AppRoute {
   fournitures,
   technicianSites,
   booklets,
-  notifications, // ✅ AJOUT
+  structures, // ✅ AJOUT
+  notifications,
 }
 
 class HomeScreen extends StatefulWidget {
@@ -47,7 +49,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   AppRoute _currentRoute = AppRoute.dashboard;
 
-  // ✅ AJOUT — démarrer le polling notifications au chargement
   @override
   void initState() {
     super.initState();
@@ -80,7 +81,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return 'Sites attribués';
       case AppRoute.booklets:
         return 'Booklets';
-      case AppRoute.notifications: // ✅ AJOUT
+      case AppRoute.structures: // ✅ AJOUT
+        return 'Structures étatiques';
+      case AppRoute.notifications:
         return 'Notifications';
     }
   }
@@ -105,7 +108,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return const TechnicianSiteScreen();
       case AppRoute.booklets:
         return const BookletScreen();
-      case AppRoute.notifications: // ✅ AJOUT
+      case AppRoute.structures: // ✅ AJOUT
+        return const StructureListScreen();
+      case AppRoute.notifications:
         return const NotificationScreen();
     }
   }
@@ -120,7 +125,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return const Color(0xFF0F4C81);
       case AppRoute.booklets:
         return const Color(0xFF0F4C81);
-      case AppRoute.notifications: // ✅ AJOUT
+      case AppRoute.structures: // ✅ AJOUT
+        return const Color(0xFF0F4C81);
+      case AppRoute.notifications:
         return const Color(0xFFC81E1E);
       default:
         return const Color(0xFF0D3380);
@@ -181,7 +188,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ]),
         ),
         actions: [
-          // ✅ AJOUT — badge notifications
           const NotificationBadge(),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
@@ -229,7 +235,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(dCtx).pop();
-              // ✅ AJOUT — arrêter le polling avant déconnexion
               context.read<NotificationProvider>().reset();
               auth.logout();
             },
@@ -297,10 +302,9 @@ class _WifiButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15), // ✅ withValues
+            color: Colors.white.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-                color: Colors.white.withValues(alpha: 0.35)), // ✅ withValues
+            border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
           ),
           child: const Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(Icons.wifi, color: Color(0xFFFF6F00), size: 14),
@@ -356,11 +360,11 @@ class _WifiSheetState extends State<_WifiSheet> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: (isOnline ? Colors.green : Colors.orange)
-                .withValues(alpha: 0.08), // ✅
+                .withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: (isOnline ? Colors.green : Colors.orange)
-                  .withValues(alpha: 0.3), // ✅
+                  .withValues(alpha: 0.3),
             ),
           ),
           child: Row(children: [
@@ -369,7 +373,7 @@ class _WifiSheetState extends State<_WifiSheet> {
               height: 48,
               decoration: BoxDecoration(
                 color: (isOnline ? Colors.green : Colors.orange)
-                    .withValues(alpha: 0.15), // ✅
+                    .withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -409,10 +413,9 @@ class _WifiSheetState extends State<_WifiSheet> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.08), // ✅
+              color: Colors.orange.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
-              border:
-                  Border.all(color: Colors.orange.withValues(alpha: 0.3)), // ✅
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
             ),
             child: Row(children: [
               const Icon(Icons.cloud_upload_outlined,

@@ -1,5 +1,6 @@
 // lib/features/vehicules/services/vehicule_service.dart
 
+import 'dart:typed_data';
 import '../../../core/api/api_constants.dart';
 import '../../../core/api/dio_client.dart';
 import '../models/vehicule_model.dart';
@@ -59,6 +60,14 @@ class VehiculeService {
 
   Future<void> deleteVehicule(int id) async =>
       _dio.delete('${ApiConstants.VEHICULES}/$id');
+
+  // ── NOUVEAU — Fiche PDF (téléchargement des bytes) ──────────────────────────
+  //  Appelle GET /api/vehicules/{id}/pdf — déclenche aussi l'archivage
+  //  automatique BLOB côté backend (voir VehiculeServiceImpl.generateVehiculePdf).
+  Future<Uint8List> downloadVehiculePdf(int id) async {
+    final response = await _dio.getBytes('${ApiConstants.VEHICULES}/$id/pdf');
+    return Uint8List.fromList(response.data ?? []);
+  }
 
   // ── Incidents ─────────────────────────────────────────────────────────────
 

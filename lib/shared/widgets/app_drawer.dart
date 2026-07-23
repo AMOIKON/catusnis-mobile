@@ -20,6 +20,7 @@ class AppDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
 
+    final bool isSuperAdmin = user?.isSuperAdmin == true;
     final bool isAdmin = user?.isSuperAdmin == true || user?.isAdmin == true;
     final bool isTechnicien = user?.isTechnicien == true;
     final bool isLogisticien = user?.role.toUpperCase() == 'LOGISTICIEN';
@@ -96,8 +97,23 @@ class AppDrawer extends StatelessWidget {
                   onTap: () => _navigate(context, AppRoute.fournitures),
                 ),
               ],
-              if (isAdmin || isTechnicien || isLogisticien) ...[
+              // ✅ AJOUT — Structures étatiques, visible pour Admin/Technicien
+              if (isAdmin || isTechnicien) ...[
                 const _SectionLabel('ORGANISATION'),
+                _DrawerItem(
+                  icon: Icons.account_balance_outlined,
+                  label: 'Structures étatiques',
+                  route: AppRoute.structures,
+                  current: currentRoute,
+                  iconColor: const Color(0xFF0F4C81),
+                  onTap: () => _navigate(context, AppRoute.structures),
+                ),
+              ],
+              // ✅ MODIFIÉ — "Assignations" réservé au SUPER_ADMIN uniquement
+              // (retiré pour ADMIN, TECHNICIEN, LOGISTICIEN)
+              if (isSuperAdmin) ...[
+                if (!(isAdmin || isTechnicien))
+                  const _SectionLabel('ORGANISATION'),
                 _DrawerItem(
                   icon: Icons.map_outlined,
                   label: 'Assignations',

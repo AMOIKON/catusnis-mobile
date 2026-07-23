@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:signature/signature.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../../../core/utils/notify.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../models/archive_model.dart';
 import '../services/archive_service.dart';
@@ -177,7 +178,7 @@ class _ArchiveFormScreenState extends State<ArchiveFormScreen> {
         }
       }
     } catch (e) {
-      _showError('Erreur sélection fichier : $e');
+      Notify.apiError(context, e, 'Erreur lors de la sélection du fichier');
     }
   }
 
@@ -197,7 +198,7 @@ class _ArchiveFormScreenState extends State<ArchiveFormScreen> {
         });
       }
     } catch (e) {
-      _showError('Erreur caméra : $e');
+      Notify.apiError(context, e, 'Erreur lors de la capture caméra');
     }
   }
 
@@ -217,7 +218,7 @@ class _ArchiveFormScreenState extends State<ArchiveFormScreen> {
         });
       }
     } catch (e) {
-      _showError('Erreur galerie : $e');
+      Notify.apiError(context, e, 'Erreur lors de la sélection en galerie');
     }
   }
 
@@ -281,29 +282,30 @@ class _ArchiveFormScreenState extends State<ArchiveFormScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_type == 'SCANNE' && !_isEdit && !_hasFile) {
-      _showError('Veuillez sélectionner un fichier');
+      Notify.error(context, 'Veuillez sélectionner un fichier');
       return;
     }
 
     if (_type == 'IMPRIME' && !_isEdit) {
       if (_nomResponsableCtrl.text.trim().isEmpty) {
-        _showError('Veuillez saisir le nom du responsable');
+        Notify.error(context, 'Veuillez saisir le nom du responsable');
         return;
       }
       if (_nomTechnicienCtrl.text.trim().isEmpty) {
-        _showError('Veuillez saisir le nom du technicien / admin');
+        Notify.error(context, 'Veuillez saisir le nom du technicien / admin');
         return;
       }
       if (!_sigResponsableOk) {
         if (_sigResponsable.isEmpty) {
-          _showError('La signature du responsable est obligatoire');
+          Notify.error(context, 'La signature du responsable est obligatoire');
           return;
         }
         await _captureResponsable();
       }
       if (!_sigTechnicienOk) {
         if (_sigTechnicien.isEmpty) {
-          _showError('La signature du technicien / admin est obligatoire');
+          Notify.error(
+              context, 'La signature du technicien / admin est obligatoire');
           return;
         }
         await _captureTechnicien();
@@ -365,7 +367,8 @@ class _ArchiveFormScreenState extends State<ArchiveFormScreen> {
       _showSuccess();
     } catch (e) {
       if (!mounted) return;
-      _showError('Erreur : $e');
+      Notify.apiError(
+          context, e, "Erreur lors de l'enregistrement de l'archive");
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -436,12 +439,6 @@ class _ArchiveFormScreenState extends State<ArchiveFormScreen> {
               )
             ],
           ));
-
-  void _showError(String msg) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(msg),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating));
 
   String _catLabel(String c) {
     switch (c) {

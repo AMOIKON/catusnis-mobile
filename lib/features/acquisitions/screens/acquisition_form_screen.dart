@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/connectivity_service.dart';
 import '../../../core/services/sync_service.dart';
+import '../../../core/utils/notify.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../models/acquisition_model.dart';
 import '../services/acquisition_form_service.dart';
@@ -135,7 +136,8 @@ class _AcquisitionFormScreenState extends State<AcquisitionFormScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      _showError('Erreur : $e');
+      Notify.apiError(
+          context, e, "Erreur lors de l'enregistrement de l'acquisition");
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -181,11 +183,7 @@ class _AcquisitionFormScreenState extends State<AcquisitionFormScreen> {
                 ],
               ));
 
-  void _showError(String msg) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(msg),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating));
+  void _showError(String msg) => Notify.error(context, msg);
 
   @override
   Widget build(BuildContext context) {

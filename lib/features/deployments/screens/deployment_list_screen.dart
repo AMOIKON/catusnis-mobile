@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/widgets/network_error_widget.dart';
+import '../../../core/utils/notify.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/deployment_model.dart';
 import '../providers/deployment_provider.dart';
@@ -413,6 +414,7 @@ class _RegionDetailScreenState extends State<_RegionDetailScreen> {
   final Set<int> _selected = {};
   String _query = '';
   String? _statutFilter;
+  bool _deleting = false;
 
   List<DeploymentModel> get _filtered => widget.items.where((d) {
         final q = _query.toLowerCase();
@@ -440,6 +442,44 @@ class _RegionDetailScreenState extends State<_RegionDetailScreen> {
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _confirmerSuppression(DeploymentModel dep) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Supprimer le déploiement'),
+        content: Text(
+            'Voulez-vous vraiment supprimer le déploiement "${dep.codeDep}" ? Cette action est irréversible.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Supprimer', style: TextStyle(color: _kRed))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _deleting = true);
+    final prov = context.read<DeploymentListProvider>();
+    final ok = await prov.supprimer(dep.id);
+    if (!mounted) return;
+    setState(() => _deleting = false);
+
+    if (ok) {
+      Notify.success(context, 'Déploiement supprimé avec succès');
+      widget.onRefresh();
+      setState(() {});
+    } else {
+      Notify.error(
+        context,
+        prov.errorMessage ?? 'Erreur lors de la suppression du déploiement',
+      );
+    }
   }
 
   @override
@@ -630,6 +670,7 @@ class _RegionDetailScreenState extends State<_RegionDetailScreen> {
                         isSelected: isSel,
                         canEdit: widget.canEdit,
                         canDelete: widget.canDelete,
+                        deleting: _deleting,
                         onToggle: () => setState(() {
                           if (isSel)
                             _selected.remove(dep.id);
@@ -645,6 +686,7 @@ class _RegionDetailScreenState extends State<_RegionDetailScreen> {
                                       deploymentExistant: dep)));
                           widget.onRefresh();
                         },
+                        onDelete: () => _confirmerSuppression(dep),
                       );
                     },
                   )),
@@ -668,16 +710,18 @@ class _RegionDetailScreenState extends State<_RegionDetailScreen> {
 // ── Row déploiement ───────────────────────────────────────────────────────────
 class _DepRow extends StatelessWidget {
   final DeploymentModel dep;
-  final bool isSelected, canEdit, canDelete;
-  final VoidCallback onToggle, onFiche, onEdit;
+  final bool isSelected, canEdit, canDelete, deleting;
+  final VoidCallback onToggle, onFiche, onEdit, onDelete;
   const _DepRow(
       {required this.dep,
       required this.isSelected,
       required this.canEdit,
       required this.canDelete,
+      required this.deleting,
       required this.onToggle,
       required this.onFiche,
-      required this.onEdit});
+      required this.onEdit,
+      required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -736,12 +780,28 @@ class _DepRow extends StatelessWidget {
               child: Text(DeploymentStatut.label(dep.statut),
                   style: TextStyle(
                       color: color, fontSize: 9, fontWeight: FontWeight.w600))),
-          if (canEdit) ...[
+          if (canEdit || canDelete) ...[
             const SizedBox(height: 6),
             Row(children: [
               _ActionBtn(Icons.visibility_outlined, _kPrimary, onFiche),
-              const SizedBox(width: 4),
-              _ActionBtn(Icons.edit_outlined, _kBlue, onEdit),
+              if (canEdit) ...[
+                const SizedBox(width: 4),
+                _ActionBtn(Icons.edit_outlined, _kBlue, onEdit),
+              ],
+              if (canDelete) ...[
+                const SizedBox(width: 4),
+                deleting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: Padding(
+                          padding: EdgeInsets.all(3),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: _kRed),
+                        ),
+                      )
+                    : _ActionBtn(Icons.delete_outline, _kRed, onDelete),
+              ],
             ]),
           ],
         ]),

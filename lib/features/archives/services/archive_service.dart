@@ -115,6 +115,20 @@ class ArchiveService {
     await _dio.delete('$_endpoint/$id');
   }
 
+  // ── Télécharger le fichier BLOB d'une archive ──────────────────────────────
+  //  Confirmé via ArchiveController.java : GET /api/archives/download/{id}
+  Future<Uint8List> downloadArchiveFile(int id) async {
+    final response = await _dio.getBytes('$_endpoint/download/$id');
+    return Uint8List.fromList(response.data ?? []);
+  }
+
+  // ── Stats (compteurs par catégorie/type) ───────────────────────────────────
+  Future<Map<String, int>> getStats() async {
+    final response = await _dio.get('$_endpoint/stats');
+    final data = response.data as Map<String, dynamic>;
+    return data.map((k, v) => MapEntry(k, (v as num).toInt()));
+  }
+
   // ── Helpers ────────────────────────────────────────────────────────────────
   String _getMimeType(String fileName) {
     final ext = fileName.split('.').last.toLowerCase();

@@ -1,5 +1,6 @@
 // lib/features/deployments/services/deployment_service.dart
 
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../../core/api/api_constants.dart';
@@ -115,7 +116,7 @@ class DeploymentService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  ARCHIVAGE
+  //  ARCHIVAGE (changement de statut — PAS l'archive PDF/BLOB)
   // ─────────────────────────────────────────────────────────────────────────
 
   Future<DeploymentModel> archiveDeployment(int id) async {
@@ -138,6 +139,15 @@ class DeploymentService {
     );
     return DeploymentModel.fromJson(
         response.data['data'] as Map<String, dynamic>);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  NOUVEAU — FICHE PDF (téléchargement des bytes)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<Uint8List> downloadDeploymentPdf(int id) async {
+    final response = await _dio.getBytes('${ApiConstants.DEPLOYMENTS}/$id/pdf');
+    return Uint8List.fromList(response.data ?? []);
   }
 
   // ─────────────────────────────────────────────────────────────────────────

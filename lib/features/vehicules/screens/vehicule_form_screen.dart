@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../core/utils/notify.dart';
 import '../models/vehicule_model.dart';
 import '../services/vehicule_service.dart';
 
@@ -96,16 +97,33 @@ class _VehiculeFormScreenState extends State<VehiculeFormScreen> {
     };
 
     try {
-      if (_isEdit)
+      if (_isEdit) {
         await _svc.updateVehicule(widget.vehicule!.id, body);
-      else
+      } else {
         await _svc.createVehicule(body);
-      if (mounted) Navigator.pop(context, true);
+      }
+      if (mounted) {
+        Notify.success(
+          context,
+          _isEdit
+              ? 'Véhicule modifié avec succès'
+              : 'Véhicule enregistré avec succès',
+        );
+        Navigator.pop(context, true);
+      }
     } catch (e) {
+      final msg = e.toString().replaceAll('Exception: ', '');
       setState(() {
-        _error = e.toString().replaceAll('Exception: ', '');
+        _error = msg;
         _saving = false;
       });
+      if (mounted) {
+        Notify.apiError(
+          context,
+          e,
+          "Erreur lors de l'enregistrement du véhicule",
+        );
+      }
     }
   }
 

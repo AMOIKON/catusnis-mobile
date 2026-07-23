@@ -736,22 +736,26 @@ class _StatutsParcChart extends StatelessWidget {
           ),
           const SizedBox(width: 20),
           // Légende
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _LegendItem('Disponibles', _kGreen, stats.vehiculesDisponibles),
-              const SizedBox(height: 8),
-              _LegendItem('En mission', _kBlue, stats.vehiculesEnMission),
-              const SizedBox(height: 8),
-              _LegendItem('En panne', _kRed, stats.vehiculesEnPanne),
-              const SizedBox(height: 12),
-              Text('Total : ${stats.vehiculesTotal} engins',
-                  style: const TextStyle(
-                      fontSize: 11,
-                      color: _kGray,
-                      fontWeight: FontWeight.w500)),
-            ],
+          // ✅ CORRIGÉ : Expanded pour que la légende prenne l'espace restant
+          //    au lieu de sa taille naturelle (fix RenderFlex overflow).
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _LegendItem('Disponibles', _kGreen, stats.vehiculesDisponibles),
+                const SizedBox(height: 8),
+                _LegendItem('En mission', _kBlue, stats.vehiculesEnMission),
+                const SizedBox(height: 8),
+                _LegendItem('En panne', _kRed, stats.vehiculesEnPanne),
+                const SizedBox(height: 12),
+                Text('Total : ${stats.vehiculesTotal} engins',
+                    style: const TextStyle(
+                        fontSize: 11,
+                        color: _kGray,
+                        fontWeight: FontWeight.w500)),
+              ],
+            ),
           ),
         ]),
       ),
@@ -773,8 +777,13 @@ class _LegendItem extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
-        Text('$label : $count',
-            style: const TextStyle(fontSize: 12, color: _kGray)),
+        // ✅ CORRIGÉ : Flexible + ellipsis pour éviter l'overflow sur
+        //    petit écran / largeur réduite.
+        Flexible(
+          child: Text('$label : $count',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, color: _kGray)),
+        ),
       ]);
 }
 

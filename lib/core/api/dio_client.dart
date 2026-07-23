@@ -113,9 +113,20 @@ class DioClient {
             options: Options(contentType: 'multipart/form-data'),
           ));
 
+  // ── NOUVEAU — Téléchargement de fichiers binaires (PDF, images archivées) ──
+  Future<Response<List<int>>> getBytes(
+    String path, {
+    Map<String, dynamic>? params,
+  }) async =>
+      _run<List<int>>(() => _dio.get<List<int>>(
+            path,
+            queryParameters: params,
+            options: Options(responseType: ResponseType.bytes),
+          ));
+
   // ── Gestion erreurs ───────────────────────────────────────────────────────
 
-  Future<Response> _run(Future<Response> Function() fn) async {
+  Future<Response<T>> _run<T>(Future<Response<T>> Function() fn) async {
     try {
       return await fn();
     } on DioException catch (e) {

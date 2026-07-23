@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/location_service.dart';
+import '../../../core/utils/notify.dart';
 import '../models/deployment_model.dart';
 import '../providers/deployment_provider.dart';
 import '../services/deployment_service.dart';
@@ -391,10 +392,23 @@ class _DeploymentFormScreenState extends State<DeploymentFormScreen> {
       longitude: _location?.longitude,
     );
     if (!mounted) return;
-    if (result != null) _showSuccess(result);
+    if (result != null) {
+      _showSuccess(result);
+    } else {
+      Notify.error(
+        context,
+        prov.errorMessage ?? "Erreur lors de l'enregistrement du déploiement",
+      );
+    }
   }
 
   void _showSuccess(DeploymentModel result) {
+    Notify.success(
+      context,
+      _isEdit
+          ? 'Déploiement mis à jour avec succès'
+          : 'Déploiement créé avec succès',
+    );
     showDialog(
       context: context,
       barrierDismissible: false,

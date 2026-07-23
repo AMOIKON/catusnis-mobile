@@ -3,11 +3,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/widgets/network_error_widget.dart';
+import '../../../core/utils/notify.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/vehicule_model.dart';
 import '../providers/vehicule_provider.dart';
 import '../widgets/vehicule_card.dart';
 import 'vehicule_form_screen.dart';
+import 'vehicule_fiche_screen.dart';
 import 'incident_form_screen.dart';
 import 'maintenance_form_screen.dart';
 
@@ -207,7 +209,22 @@ class _VehiculeScreenState extends State<VehiculeScreen>
                           MaterialPageRoute(
                               builder: (_) => IncidentFormScreen(incident: i)))
                       .then((_) => prov.charger(refresh: true)),
-                  onDelete: () => prov.supprimerIncident(i.id),
+                  onDelete: () async {
+                    final ok = await prov.supprimerIncident(i.id);
+                    if (ok) {
+                      if (context.mounted) {
+                        Notify.success(
+                            context, 'Incident supprimé avec succès');
+                      }
+                    } else {
+                      if (context.mounted) {
+                        Notify.error(
+                            context,
+                            prov.error ??
+                                "Erreur lors de la suppression de l'incident");
+                      }
+                    }
+                  },
                 ),
                 emptyIcon: Icons.warning_amber_outlined,
                 emptyMsg: 'Aucun incident signalé',
@@ -227,7 +244,22 @@ class _VehiculeScreenState extends State<VehiculeScreen>
                               builder: (_) =>
                                   MaintenanceFormScreen(maintenance: m)))
                       .then((_) => prov.charger(refresh: true)),
-                  onDelete: () => prov.supprimerMaintenance(m.id),
+                  onDelete: () async {
+                    final ok = await prov.supprimerMaintenance(m.id);
+                    if (ok) {
+                      if (context.mounted) {
+                        Notify.success(
+                            context, 'Maintenance supprimée avec succès');
+                      }
+                    } else {
+                      if (context.mounted) {
+                        Notify.error(
+                            context,
+                            prov.error ??
+                                "Erreur lors de la suppression de la maintenance");
+                      }
+                    }
+                  },
                 ),
                 emptyIcon: Icons.build_outlined,
                 emptyMsg: 'Aucune maintenance planifiée',
@@ -433,6 +465,7 @@ class _EnginsListState extends State<_EnginsList> {
 }
 
 // ── Row type véhicule ─────────────────────────────────────────────────────────
+// ── Row type véhicule ─────────────────────────────────────────────────────────
 class _TypeVehiculeRow extends StatelessWidget {
   final String typeName;
   final List<VehiculeModel> items, allItems;
@@ -450,8 +483,10 @@ class _TypeVehiculeRow extends StatelessWidget {
     final color = _colorForIdx(colorIdx);
     final total = allItems.length;
     final dispo = allItems.where((v) => v.statut == 'DISPONIBLE').length;
+    final enMission = allItems.where((v) => v.statut == 'EN_MISSION').length;
     final panne = allItems.where((v) => v.statut == 'EN_PANNE').length;
     final alert = allItems.where((v) => v.hasAlert).length;
+    final autres = total - dispo - enMission - panne;
 
     return GestureDetector(
       onTap: onTap,
@@ -518,28 +553,14 @@ class _TypeVehiculeRow extends StatelessWidget {
                   child: Row(children: [
                     if (dispo > 0)
                       Expanded(flex: dispo, child: Container(color: _kPrimary)),
-                    if (allItems.where((v) => v.statut == 'EN_MISSION').length >
-                        0)
+                    if (enMission > 0)
                       Expanded(
-                          flex: allItems
-                              .where((v) => v.statut == 'EN_MISSION')
-                              .length,
-                          child: Container(color: _kBlue)),
+                          flex: enMission, child: Container(color: _kBlue)),
                     if (panne > 0)
                       Expanded(flex: panne, child: Container(color: _kRed)),
-                    if (dispo +
-                            allItems
-                                .where((v) => v.statut == 'EN_MISSION')
-                                .length +
-                            panne <
-                        total)
+                    if (autres > 0)
                       Expanded(
-                          flex: total -
-                              dispo -
-                              allItems
-                                  .where((v) => v.statut == 'EN_MISSION')
-                                  .length -
-                              panne,
+                          flex: autres,
                           child: Container(color: Colors.grey[200])),
                   ])),
             Divider(height: 1, color: Colors.grey[100]),
@@ -782,15 +803,34 @@ class _TypeVehiculeDetailState extends State<_TypeVehiculeDetail> {
                           else
                             _selected.add(v.id);
                         }),
+                        onFiche: () => Navigator.push(
+                            ctx,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    VehiculeFicheScreen(vehiculeId: v.id))),
                         onEdit: () => Navigator.push(
                                 ctx,
                                 MaterialPageRoute(
                                     builder: (_) =>
                                         VehiculeFormScreen(vehicule: v)))
                             .then((_) => widget.onRefresh()),
-                        onDelete: () => context
-                            .read<VehiculeProvider>()
-                            .supprimerVehicule(v.id),
+                        onDelete: () async {
+                          final provider = ctx.read<VehiculeProvider>();
+                          final ok = await provider.supprimerVehicule(v.id);
+                          if (ok) {
+                            if (ctx.mounted) {
+                              Notify.success(
+                                  ctx, 'Véhicule supprimé avec succès');
+                            }
+                          } else {
+                            if (ctx.mounted) {
+                              Notify.error(
+                                  ctx,
+                                  provider.error ??
+                                      "Erreur lors de la suppression du véhicule");
+                            }
+                          }
+                        },
                       );
                     },
                   )),
@@ -835,7 +875,7 @@ class _TypeVehiculeDetailState extends State<_TypeVehiculeDetail> {
 class _VehiculeRow extends StatelessWidget {
   final VehiculeModel vehicule;
   final bool isSelected, canEdit, canDelete;
-  final VoidCallback onToggle, onEdit, onDelete;
+  final VoidCallback onToggle, onEdit, onDelete, onFiche;
   const _VehiculeRow(
       {required this.vehicule,
       required this.isSelected,
@@ -843,7 +883,8 @@ class _VehiculeRow extends StatelessWidget {
       required this.canDelete,
       required this.onToggle,
       required this.onEdit,
-      required this.onDelete});
+      required this.onDelete,
+      required this.onFiche});
 
   Color get _statusColor {
     switch (vehicule.statut) {
@@ -920,6 +961,8 @@ class _VehiculeRow extends StatelessWidget {
             if (canEdit || canDelete) ...[
               const SizedBox(height: 6),
               Row(children: [
+                _ABtn(Icons.picture_as_pdf_outlined, _kPrimary, onFiche),
+                const SizedBox(width: 4),
                 if (canEdit) _ABtn(Icons.edit_outlined, _kBlue, onEdit),
                 if (canDelete) ...[
                   const SizedBox(width: 4),

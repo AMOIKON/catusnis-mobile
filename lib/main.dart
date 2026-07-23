@@ -18,6 +18,8 @@ import 'features/profile/screens/profile_screen.dart';
 import 'features/splash/screens/splash_screen.dart';
 import 'shared/theme/app_theme.dart';
 import 'features/notifications/providers/NotificationProvider.dart';
+// Ajouter cet import avec les autres imports de providers
+import 'features/structures/providers/structure_provider.dart';
 
 void main() async {
   try {
@@ -107,6 +109,9 @@ class CatusnisApp extends StatelessWidget {
 
         // ── Notifications ───────────────────────────────────────────────────
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+
+        // ── Structures étatiques ──────────────────────────────────────────────
+        ChangeNotifierProvider(create: (_) => StructureListProvider()),
       ],
       child: MaterialApp(
         title: 'CATUSNIS Mobile',
